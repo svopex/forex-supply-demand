@@ -172,30 +172,62 @@ leg = ("červené pásmo = SUPPLY (prodej)      zelené pásmo = DEMAND (nákup)
 fig1.text(0.5, 0.045, leg, fontsize=8, va="center", ha="center",
           bbox=dict(boxstyle="round,pad=0.6", fc="#f5f5f5", ec="#bbbbbb"))
 
-# ---------- STRÁNKA 2: obchodní plán ----------
-fig2 = plt.figure(figsize=(11.69, 8.27)); fig2.patch.set_facecolor("white")
-ax2 = fig2.add_axes([0, 0, 1, 1]); ax2.axis("off")
+# ---------- STRÁNKA 2+: obchodní plán (teče přes více stránek dle objemu textu) ----------
+# Plán se sází "tokem": kurzor plyne shora dolů a jakmile by blok textu spadl pod
+# dolní okraj, založí se automaticky nová stránka. Tím se detailní zdůvodnění ani
+# poznámky nikdy neuříznou (dřív se sázelo na pevné y a dlouhý plán přetékal mimo A4).
+Y_TOP = 0.94        # horní okraj textového toku
+Y_BOTTOM = 0.055    # dolní okraj toku (nad patičkou s disclaimerem)
+plan_state = {"ax": None, "y": Y_TOP}   # aktuální osa a svislý kurzor
+plan_figs = []                           # všechny vysázené stránky plánu
 
-def T(x, y, s, size=10, weight="normal", color="#212121"):
-    ax2.text(x, y, s, fontsize=size, fontweight=weight, color=color,
-             ha="left", va="top", transform=ax2.transAxes)
+# Založí novou stránku plánu (bílé A4 na šířku), vloží patičku s disclaimerem a
+# nastaví kurzor na horní okraj.
+def nova_stranka():
+    fig = plt.figure(figsize=(11.69, 8.27)); fig.patch.set_facecolor("white")
+    ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)   # ať axhline i souřadnice sedí 0–1
+    # disclaimer jako patička každé stránky plánu
+    ax.text(0.06, 0.025, "Upozornění: materiál slouží ke vzdělávacím účelům, nejde o investiční doporučení.",
+            fontsize=8, color="#888888", ha="left", va="bottom", transform=ax.transAxes)
+    plan_figs.append(fig)
+    plan_state["ax"] = ax
+    plan_state["y"] = Y_TOP
 
-T(0.06, 0.96, f"Obchodní plán {cfg['symbol']} — 1H supply/demand", 17, "bold", "#0d47a1")
-T(0.06, 0.915, f"Aktuální cena: {pf(current)}  ·  datum: {cfg['as_of']}  ·  zdroj dat: {cfg['source']}",
-  9.5, color="#555555")
-ax2.axhline(0.90, color="#0d47a1", linewidth=1.2)
+# Vypíše text na aktuální kurzor; dy případně posune kurzor dolů o daný krok.
+def T(x, s, size=10, weight="normal", color="#212121", dy=0.0):
+    plan_state["ax"].text(x, plan_state["y"], s, fontsize=size, fontweight=weight,
+                          color=color, ha="left", va="top", transform=plan_state["ax"].transAxes)
+    plan_state["y"] -= dy
+
+# Pojistí, že se blok o výšce `space` ještě vejde; jinak přeteče na novou stránku.
+def zajisti(space):
+    if plan_state["y"] - space < Y_BOTTOM:
+        nova_stranka()
+
+nova_stranka()
+# Hlavička plánu (jen na první stránce)
+T(0.06, f"Obchodní plán {cfg['symbol']} — 1H supply/demand", 17, "bold", "#0d47a1", dy=0.040)
+T(0.06, f"Aktuální cena: {pf(current)}  ·  datum: {cfg['as_of']}  ·  zdroj dat: {cfg['source']}",
+  9.5, color="#555555", dy=0.022)
+plan_state["ax"].axhline(plan_state["y"] + 0.004, color="#0d47a1", linewidth=1.2)
+plan_state["y"] -= 0.020
 
 # Bloky jednotlivých setupů (počítá pipy/body a RRR automaticky)
 kruh = ["①", "②", "③", "④"]
-y = 0.865
 for idx, s in enumerate(setups):
     lc = BARVA[s["side"]]
     risk = abs(s["entry"] - s["sl"]) / pip
     reward = abs(s["tp"] - s["entry"]) / pip
     rrr = reward / risk if risk else 0
-    T(0.06, y, f"{kruh[idx]} {s['zone_type']} zóna ({s['side']} / "
-      f"{'prodej' if s['side']=='SHORT' else 'nákup'})", 13, "bold", lc)
-    y -= 0.04
+    # zdůvodnění bývá dlouhé -> předem zalomíme a odhadneme výšku celého bloku,
+    # abychom ho případně celý posunuli na novou stránku (nerozdělíme ho v půli)
+    rationale = s.get("rationale", "")
+    radky = textwrap.wrap(rationale, width=100) or [""]
+    blok_h = 0.036 + 5 * 0.028 + len(radky) * 0.025 + 0.015
+    zajisti(blok_h)
+    T(0.06, f"{kruh[idx]} {s['zone_type']} zóna ({s['side']} / "
+      f"{'prodej' if s['side']=='SHORT' else 'nákup'})", 13, "bold", lc, dy=0.036)
     rows = [
         ("Zóna:", f"{pf(s['zone'][0])} – {pf(s['zone'][1])}"),
         ("Vstup:", f"{pf(s['entry'])}  ({'Sell' if s['side']=='SHORT' else 'Buy'} Limit, proximální hrana)"),
@@ -203,26 +235,26 @@ for idx, s in enumerate(setups):
         ("Take-profit:", f"{pf(s['tp'])}  (protilehlá zóna)  = {reward:.0f} {unit}"),
         ("Poměr RRR:", f"≈ {rrr:.2f} : 1"),
     ]
-    # jednořádkové parametry setupu
+    # jednořádkové parametry setupu (klíč vlevo, hodnota od 0.30 na stejném řádku)
     for k, v in rows:
-        T(0.09, y, k, 10.5, "bold"); T(0.30, y, v, 10.5); y -= 0.034
-    # zdůvodnění bývá dlouhé -> zalomíme na více řádků, ať nepřeteče mimo stránku
-    rationale = s.get("rationale", "")
-    T(0.09, y, "Zdůvodnění:", 10.5, "bold")
-    for j, ln in enumerate(textwrap.wrap(rationale, width=100) or [""]):
-        T(0.30, y, ln, 10.5); y -= 0.030
-    y -= 0.02
+        T(0.09, k, 10.5, "bold"); T(0.30, v, 10.5, dy=0.028)
+    # zdůvodnění: popisek na prvním řádku, zalomený text pod ním
+    T(0.09, "Zdůvodnění:", 10.5, "bold")
+    for ln in radky:
+        T(0.30, ln, 10.5, dy=0.025)
+    plan_state["y"] -= 0.015
 
-# Poznámky z configu + disclaimer
-ax2.axhline(y + 0.01, color="#bbbbbb", linewidth=0.8)
-y -= 0.03
-T(0.06, y, "Poznámky k obchodování", 12, "bold", "#0d47a1"); y -= 0.034
+# Poznámky z configu
+zajisti(0.034 + 0.03 + 0.03)   # nadpis + aspoň jedna odrážka, ať nezůstane osiřelý nadpis
+plan_state["ax"].axhline(plan_state["y"] + 0.01, color="#bbbbbb", linewidth=0.8)
+plan_state["y"] -= 0.03
+T(0.06, "Poznámky k obchodování", 12, "bold", "#0d47a1", dy=0.034)
 # poznámky rovněž zalamujeme; pokračovací řádky odsadíme pod odrážku
 for note in cfg.get("notes", []):
-    for j, ln in enumerate(textwrap.wrap("• " + note, width=118) or [""]):
-        T(0.07 if j == 0 else 0.085, y, ln, 9.8); y -= 0.030
-T(0.06, 0.02, "Upozornění: materiál slouží ke vzdělávacím účelům, nejde o investiční doporučení.",
-  8, "normal", "#888888")
+    wr = textwrap.wrap("• " + note, width=118) or [""]
+    zajisti(len(wr) * 0.030)   # celou poznámku drž pohromadě
+    for j, ln in enumerate(wr):
+        T(0.07 if j == 0 else 0.085, ln, 9.8, dy=0.030)
 
 # ---------- Uložení ----------
 # Automatický název <YYYYMMDD>_<ticker>.pdf z data posledního baru a tickeru.
@@ -236,9 +268,14 @@ if not ticker:
     ticker = base.replace("_1h.json", "").replace(".json", "")
 out = cfg.get("output", f"{date_str}_{ticker}.pdf")
 
+# Do PDF: nejdřív graf (stránka 1), pak všechny stránky plánu.
 with PdfPages(out) as pdf:
-    pdf.savefig(fig1); pdf.savefig(fig2)
-fig1.savefig(out.replace(".pdf", "_page1.png"), dpi=110)   # náhled na vizuální kontrolu
-fig2.savefig(out.replace(".pdf", "_page2.png"), dpi=110)
+    pdf.savefig(fig1)
+    for f in plan_figs:
+        pdf.savefig(f)
+# Náhledy na vizuální kontrolu: _page1 = graf, _page2.. = stránky plánu.
+fig1.savefig(out.replace(".pdf", "_page1.png"), dpi=110)
+for i, f in enumerate(plan_figs, start=2):
+    f.savefig(out.replace(".pdf", f"_page{i}.png"), dpi=110)
 plt.close("all")
-print("PDF hotovo:", out)
+print("PDF hotovo:", out, f"({1 + len(plan_figs)} stránek)")
