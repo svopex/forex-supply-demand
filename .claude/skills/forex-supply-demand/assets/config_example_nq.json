@@ -1,11 +1,11 @@
 {
   "symbol": "NASDAQ 100 (NQ)",
   "ticker": "NQ",
-  "data_file": "NQF_4h.json",
+  "data_file": "NQF_1h.json",
   "current_price": 29901.75,
   "as_of": "3. 7. 2026",
-  "source": "Yahoo Finance NQ=F (4H)",
-  "display_start": "2026-06-08",
+  "source": "Yahoo Finance NQ=F (1H)",
+  "display_start": "2026-06-25",
   "ylim": [28950, 31120],
   "pip_size": 1.0,
   "unit_label": "bodů",
@@ -17,7 +17,7 @@
       "side": "LONG",
       "zone": [29280, 29380],
       "entry": 29380,
-      "sl": 29180,
+      "sl": 29240,
       "tp": 30480,
       "rationale": "dvojité dno 29 284 / 29 329, silný býčí close 3.7. z police; rostoucí low = uptrend"
     },
@@ -26,15 +26,15 @@
       "side": "SHORT",
       "zone": [30480, 30600],
       "entry": 30480,
-      "sl": 30690,
+      "sl": 30640,
       "tp": 29380,
       "rationale": "origin poklesu 30.6.→2.7. (30 600 → 29 328); pod resistance 30 900–30 980"
     }
   ],
   "notes": [
     "Cena 29 901,75 je uprostřed rozpětí 29 380–30 480 → čekající (pending) příkazy, ne okamžitý vstup.",
-    "Obě zóny míří na sebe: TP obchodu = protilehlá zóna („zóna do zóny“), RRR ≈ 5:1.",
-    "SL je za vzdálenou hranou zóny (~90–100 bodů) proti proražení knotem.",
+    "Obě zóny míří na sebe: TP obchodu = protilehlá zóna („zóna do zóny“), RRR ≈ 7:1.",
+    "SL je za vzdálenou hranou zóny (~40–50 bodů) proti proražení knotem.",
     "Struktura je býčí (rostoucí low) → LONG z poptávky je preferovaná strana; SHORT jen při rejekci supply.",
     "E-mini NASDAQ 100 (CME), 1 bod = 20 USD/kontrakt; riziko max. 1–2 % kapitálu, pozor na CPI/FOMC."
   ]

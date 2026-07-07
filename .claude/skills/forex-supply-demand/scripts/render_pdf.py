@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Vykreslí 4h svíčkový graf instrumentu (forex pár, index NQ, zlato XAUUSD…) se
+# Vykreslí 1h svíčkový graf instrumentu (forex pár, index NQ, zlato XAUUSD…) se
 # supply/demand zónami a vygeneruje dvoustránkové PDF (graf + obchodní plán).
 # Vše řízeno JSON configem.
 #
@@ -37,9 +37,9 @@ plt.rcParams["axes.unicode_minus"] = False
 
 cfg = json.load(open(sys.argv[1]))
 
-# Data mohou být buď dict s metadaty o zarovnání (nový formát z fetch_4h.py),
-# nebo holý seznam barů (starší formát). anchor_tz použijeme pro popisky osy X
-# a datum v názvu souboru, aby dny odpovídaly burzovnímu pásmu (jako TradingView).
+# Data mohou být buď dict s metadaty (nový formát z fetch_1h.py), nebo holý
+# seznam barů (starší formát). anchor_tz použijeme pro popisky osy X a datum
+# v názvu souboru, aby dny odpovídaly burzovnímu pásmu (jako TradingView).
 raw = json.load(open(cfg["data_file"]))
 if isinstance(raw, dict):
     bars = raw["bars"]
@@ -103,7 +103,7 @@ start_ts = datetime.datetime.strptime(cfg["display_start"], "%Y-%m-%d") \
 disp = [b for b in bars if b[0] >= start_ts]
 n = len(disp)
 
-# ---------- STRÁNKA 1: 4h svíčkový graf ----------
+# ---------- STRÁNKA 1: 1h svíčkový graf ----------
 fig1 = plt.figure(figsize=(11.69, 8.27))     # A4 na šířku
 ax = fig1.add_axes([0.075, 0.135, 0.70, 0.775])  # užší osa -> místo na popisky
 
@@ -160,7 +160,7 @@ else:
 
 ax.set_ylabel(cfg["symbol"], fontsize=10)
 ax.grid(True, axis="y", linestyle=":", alpha=0.35)
-ax.set_title(f"{cfg['symbol']} — 4H timeframe — supply/demand zóny a doporučené vstupy\n"
+ax.set_title(f"{cfg['symbol']} — 1H timeframe — supply/demand zóny a doporučené vstupy\n"
              f"aktuální data k {cfg['as_of']} (cena {pf(current)}, zdroj {cfg['source']})",
              fontsize=12, fontweight="bold", pad=12)
 
@@ -180,7 +180,7 @@ def T(x, y, s, size=10, weight="normal", color="#212121"):
     ax2.text(x, y, s, fontsize=size, fontweight=weight, color=color,
              ha="left", va="top", transform=ax2.transAxes)
 
-T(0.06, 0.96, f"Obchodní plán {cfg['symbol']} — 4H supply/demand", 17, "bold", "#0d47a1")
+T(0.06, 0.96, f"Obchodní plán {cfg['symbol']} — 1H supply/demand", 17, "bold", "#0d47a1")
 T(0.06, 0.915, f"Aktuální cena: {pf(current)}  ·  datum: {cfg['as_of']}  ·  zdroj dat: {cfg['source']}",
   9.5, color="#555555")
 ax2.axhline(0.90, color="#0d47a1", linewidth=1.2)
@@ -233,7 +233,7 @@ date_str = datetime.datetime.fromtimestamp(last_ts, TZ).strftime("%Y%m%d")
 ticker = cfg.get("ticker")
 if not ticker:
     base = os.path.basename(cfg["data_file"])
-    ticker = base.replace("_4h.json", "").replace(".json", "")
+    ticker = base.replace("_1h.json", "").replace(".json", "")
 out = cfg.get("output", f"{date_str}_{ticker}.pdf")
 
 with PdfPages(out) as pdf:
