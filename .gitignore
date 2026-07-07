@@ -1,0 +1,14 @@
+# macOS smetí
+.DS_Store
+
+# Python cache a virtuální prostředí
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Vygenerované výstupy (PDF grafy a plány)
+*.pdf
+
+# Lokální konfigurace Claude Code (necommitujeme uživatelská nastavení)
+.claude/settings.local.json

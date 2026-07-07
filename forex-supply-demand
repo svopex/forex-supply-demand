@@ -1,0 +1,8 @@
+#!/bin/bash
+
+cd ~/GitLab/forex-supply-demand
+pwd
+
+claude -p "/forex-supply-demand NQ (nasdaq)" --output-format stream-json --verbose --model opus --effort xhigh
+claude -p "/forex-supply-demand GC (gold)" --output-format stream-json --verbose --model opus --effort xhigh
+claude -p "/forex-supply-demand EURUSD" --output-format stream-json --verbose --model opus --effort xhigh

@@ -1,0 +1,39 @@
+{
+  "symbol": "EUR/USD",
+  "ticker": "EURUSD",
+  "data_file": "EURUSDX_4h.json",
+  "current_price": 1.1440,
+  "as_of": "3. 7. 2026",
+  "source": "Yahoo Finance (4H)",
+  "display_start": "2026-06-15",
+  "ylim": [1.1295, 1.1650],
+  "pip_size": 0.0001,
+  "unit_label": "pipů",
+  "setups": [
+    {
+      "zone_type": "SUPPLY",
+      "side": "SHORT",
+      "zone": [1.1470, 1.1495],
+      "entry": 1.1470,
+      "sl": 1.1502,
+      "tp": 1.1350,
+      "rationale": "dvojitá rejekce 1.1485 (19.6.) a 1.14745 (2.7.), medvědí trend, RSI < 50"
+    },
+    {
+      "zone_type": "DEMAND",
+      "side": "LONG",
+      "zone": [1.1325, 1.1350],
+      "entry": 1.1350,
+      "sl": 1.1318,
+      "tp": 1.1470,
+      "rationale": "52týdenní minimum + počátek aktuálního odrazu, silná HTF poptávka"
+    }
+  ],
+  "notes": [
+    "Cena leží uprostřed rozpětí — jde o čekající (pending) příkazy, ne okamžitý vstup.",
+    "Obě zóny míří na sebe: TP každého obchodu = protilehlá zóna (range „zóna do zóny“).",
+    "SL je vždy až za vzdálenou hranou zóny, aby ho nevyhodilo běžné proražení knotem.",
+    "Před zásadními událostmi (ECB, Fed, NFP) zvaž nižší pozici nebo počkej.",
+    "Doporučené riziko max. 1–2 % kapitálu na obchod."
+  ]
+}
