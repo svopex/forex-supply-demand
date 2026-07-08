@@ -245,12 +245,19 @@ for idx, s in enumerate(setups):
     plan_state["y"] -= 0.015
 
 # Poznámky z configu
-zajisti(0.034 + 0.03 + 0.03)   # nadpis + aspoň jedna odrážka, ať nezůstane osiřelý nadpis
-plan_state["ax"].axhline(plan_state["y"] + 0.01, color="#bbbbbb", linewidth=0.8)
-plan_state["y"] -= 0.03
+notes = cfg.get("notes", [])
+# Rezerva = oddělovač + nadpis + CELÁ první poznámka (po zalomení může mít víc
+# řádků) — jinak by nadpis zůstal osiřelý na konci stránky a poznámky by
+# přetekly samy na další stranu.
+prvni_h = (len(textwrap.wrap("• " + notes[0], width=118)) if notes else 1) * 0.030
+zajisti(0.03 + 0.034 + prvni_h)
+# oddělovací linku kresli jen uvnitř rozepsané stránky (na čerstvé nemá smysl)
+if plan_state["y"] < Y_TOP:
+    plan_state["ax"].axhline(plan_state["y"] + 0.01, color="#bbbbbb", linewidth=0.8)
+    plan_state["y"] -= 0.03
 T(0.06, "Poznámky k obchodování", 12, "bold", "#0d47a1", dy=0.034)
 # poznámky rovněž zalamujeme; pokračovací řádky odsadíme pod odrážku
-for note in cfg.get("notes", []):
+for note in notes:
     wr = textwrap.wrap("• " + note, width=118) or [""]
     zajisti(len(wr) * 0.030)   # celou poznámku drž pohromadě
     for j, ln in enumerate(wr):

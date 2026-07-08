@@ -75,7 +75,7 @@ def detekuj_swingy(bars, W=6):
     return highs, lows
 
 def fmt(t):
-    return datetime.datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M")
+    return datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 # Formát ceny pro výpis: velká čísla (index, zlato) 2 desetinná místa,
 # malé forex kurzy 5 desetinných míst.
@@ -138,6 +138,9 @@ def main():
     for t, v in lows:
         if t >= last_ts - 30 * 86400 and v < px:
             print(f"  {fmt(t)}  {pcena(v)}")
+
+    # navazující krok: algoritmická detekce a ohodnocení supply/demand zón
+    print(f"\nDalší krok: python3 <skill>/scripts/find_zones.py {path}")
 
 if __name__ == "__main__":
     main()

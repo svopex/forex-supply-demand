@@ -16,10 +16,12 @@ description: >-
 # Supply/demand vstupy na 1H + PDF (forex, NQ, zlato)
 
 Tento skill vede celý postup: získat aktuální 1h data instrumentu (forex pár,
-index NASDAQ 100 / NQ, nebo zlato XAUUSD), najít supply/demand zóny, navrhnout
-vstupy (SL na hraně zóny, TP ≥ 2:1, ideálně zóna-do-zóny) a vygenerovat čisté
-vícestránkové PDF s grafem a plánem v češtině (1. strana graf, další strany
-obchodní plán – ten „teče" přes tolik stran, kolik si žádá objem textu).
+index NASDAQ 100 / NQ, nebo zlato XAUUSD), **algoritmicky najít a ohodnotit
+supply/demand zóny** (`find_zones.py` — base→impulz, čerstvost, invalidace,
+skóre), navrhnout vstupy (SL na hraně zóny, TP ≥ 2:1, ideálně zóna-do-zóny)
+a vygenerovat čisté vícestránkové PDF s grafem a plánem v češtině (1. strana
+graf, další strany obchodní plán – ten „teče" přes tolik stran, kolik si žádá
+objem textu).
 
 ## ⚠️ Slepé uličky, kterým se vyhni (dříve stály čas)
 
@@ -89,23 +91,45 @@ export MPLCONFIGDIR="$PWD/.mplcache"
 ```
 Spouštěj s `dangerouslyDisableSandbox: true`. Skript vypíše počet 1h barů,
 použité **pásmo pro dělení dnů** (aby dny v grafu seděly na TradingView — viz
-slepá ulička 8), poslední close (= aktuální cena), 30/60d rozpětí a **detekované
-swing high/low** nad a pod cenou z posledních 30 dní — to jsou kandidáti na zóny.
-Na 1h je swingů hodně, proto je okno detekce širší (default 6 barů na stranu, lze
-změnit `--swing-window`). Výstupní JSON je dict s polem `anchor_tz` a `bars`
+slepá ulička 8), poslední close (= aktuální cena), 30/60d rozpětí a orientační
+swing high/low. Výstupní JSON je dict s polem `anchor_tz` a `bars`
 (starší holý seznam `render_pdf.py` pořád načte). Zarovnávání není potřeba řešit.
 
-### 4. Průzkum internetu (kontext + konfluence)
+### 4. Algoritmická detekce zón (hlavní zdroj kandidátů)
+```bash
+python3 <skill>/scripts/find_zones.py EURUSDX_1h.json
+```
+Čistý stdlib — běží **bez venv i bez vypínání sandboxu**. Najde skutečné S/D
+struktury (base 1–6 svíček s malými těly → impulzivní odchod měřený v ATR),
+zóny proražené závěrem svíčky za distální hranou rovnou vyřadí (invalidace)
+a zbylé ohodnotí **skóre 0–100** (síla odchodu, čerstvost = počet retestů,
+kompaktnost base, reverzní vzor DBR/RBD, konfluence se swingy, stáří).
+Vypíše:
+
+- top SUPPLY nad cenou a top DEMAND pod cenou s hranami **prox/distal**
+  (prox = krajní tělo base, tam se vstupuje; distal = krajní knot, za něj SL),
+- **ATR(14) a doporučený SL buffer** (~0.30×ATR) — použij ho místo odhadu,
+- **bias** (EMA50/EMA200 + struktura swingů) — rychlá náhrada HTF kontroly,
+- zóny, ve kterých cena právě je (ty pro pending vstup nepoužívej),
+- **párování zóna-do-zóny s hotovým RRR** pro long i short,
+- vedle uloží strojově čitelný `<symbol>_zones.json` (stejná data, pro
+  přesné hodnoty do configu).
+
+Když je kandidátů málo (typicky u instrumentu na kraji range), zkus
+`--min-depart 1.4` (default 1.8) nebo `--days 60` (default 45). `--top N`
+zvětší výpis, `--swing-window` ladí konfluenci.
+
+### 5. Průzkum internetu (kontext + konfluence)
 Přes `WebSearch` dohledej aktuální support/resistance a bias (trend, RSI, MACD,
 nadcházející události ECB/Fed/NFP). Použij víc zdrojů (RoboForex, DailyForex,
-FXStreet, LiteFinance, TradingView …) a hledej **shodu** webových úrovní s reálnými swingy z
-dat. V PDF/shrnutí uveď zdroje jako odkazy.
+FXStreet, LiteFinance, TradingView …) a hledej **shodu** webových úrovní se
+zónami z `find_zones.py`. V PDF/shrnutí uveď zdroje jako odkazy.
 
-### 5. Výběr zón a úrovní (viz metodika níže)
+### 6. Výběr zón a úrovní (viz metodika níže)
 Vyber jednu **supply** (nad cenou, pro short) a jednu **demand** (pod cenou,
-pro long). Definuj zónu, vstup, SL, TP.
+pro long) — primárně z kandidátů `find_zones.py`. Definuj zónu, vstup, SL, TP.
 
-### 6. Vygenerování PDF
+### 7. Vygenerování PDF
 Napiš `config.json` (šablony podle instrumentu: `assets/config_example.json` pro
 forex, `assets/config_example_nq.json` pro NQ, `assets/config_example_xauusd.json`
 pro zlato) a spusť:
@@ -121,25 +145,40 @@ adresáře uživatele.
 
 ## Metodika supply/demand (1H)
 
-- **Demand zóna (LONG):** base před silným býčím impulzem (drop-base-rally),
-  typicky poslední výrazné swing low / origin aktuálního odrazu, 
-  origin posledního výrazného růstu, 
-  nebo opakovaně odmítnutý odpor (2+ rejekce ve stejném pásmu).
-  Konfluences klíčovou `webovou` podporou zónu posiluje.
-- **Supply zóna (SHORT):** base před silným medvědím impulzem (rally-base-drop),
-  typicky poslední výrazné swing high / origin aktuálního odrazu, 
-  origin posledního výrazného poklesu, 
-  nebo opakovaně odmítnutý odpor (2+ rejekce ve stejném pásmu). 
-  Konfluences klíčovou `webovou` podporou zónu posiluje.
-- **Hrany zóny:** proximální hrana = blíž ceně (tam se vstupuje), distální hrana
-  = dál od ceny (za ni jde SL).
+### Jak vybrat z kandidátů find_zones.py
+
+- **Řaď se skóre, ale rozhoduj úsudkem:** skóre je ranking, ne verdikt. Při
+  podobném skóre dej přednost zóně **blíž ceně** (rychlejší naplnění) a s
+  **konfluencí webových úrovní** z kroku 5.
+- **Čerstvost je klíčová:** ber zóny s **0–1 retestem**. Každý návrat ceny
+  spotřebovává čekající příkazy v zóně; 2+ retesty = slabá zóna (jen s velmi
+  silnou další konfluencí).
+- **Reverzní vzory (DBR/RBD) > pokračovací (RBR/DBD) > `base`** (impulz z
+  ploché konsolidace).
+- **Preferuj zóny po směru biasu**, který skript vypíše (medvědí bias →
+  primární setup short ze supply; protisměrný setup uveď jako sekundární).
+- **Zóny označené „cena uvnitř" nepoužívej** pro pending vstup — cena už v
+  zóně je, vstup by neměl žádnou reakci k odpracování.
+- **Vizuálně ověř** vybrané zóny na vykresleném grafu (PNG náhled): hrany smí
+  být jemně doladěné na shluk knotů nebo kulaté číslo, ale drž se hodnot z
+  `<symbol>_zones.json` jako základu.
+- Detekce je deterministická z dat — **webový průzkum ji doplňuje** (události,
+  sentiment, HTF úrovně), nikdy nenahrazuje.
+
+### Konstrukce obchodu
+
+- **Demand zóna (LONG):** base před silným býčím impulzem (drop-base-rally).
+- **Supply zóna (SHORT):** base před silným medvědím impulzem (rally-base-drop).
+- **Hrany zóny:** proximální hrana = blíž ceně, krajní **tělo** base (tam se
+  vstupuje); distální hrana = dál od ceny, krajní **knot** base (za ni jde SL).
 - **Vstup:** limitní příkaz na proximální hraně (Sell Limit u supply, Buy Limit
   u demand).
-- **SL na hraně zóny:** pár pipů (u NQ ~40–50 bodů, u zlata ~10–15 USD) **za
-  distální hranu**, aby ho nevyhodilo běžné proražení knotem. Na 1h jsou zóny
-  užší a stopy těsnější než na vyšších timeframech.
+- **SL za distální hranou:** buffer **~0.30×ATR(14)** — konkrétní hodnotu
+  vypisuje `find_zones.py` (orientačně: forex pár pipů, NQ ~40 bodů, zlato
+  ~5–10 USD). Chrání před běžným proražením knotem; na 1h jsou zóny užší a
+  stopy těsnější než na vyšších timeframech.
 - **TP:** minimálně **2:1**, ideálně **proximální hrana protilehlé zóny**
-  („zóna do zóny") — vznikne symetrický range trade s vysokým RRR.
+  („zóna do zóny") — RRR pro páry zón počítá `find_zones.py` rovnou.
 - **Jednotka rizika/zisku:** forex = pipy, NQ = body, zlato = USD (za unci).
   Řídí ji `unit_label` v configu; RRR se počítá vždy stejně z `pip_size`.
 - Cena bývá uprostřed rozpětí → jde o **čekající (pending) příkazy**, ne okamžitý
