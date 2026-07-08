@@ -1,11 +1,11 @@
 {
   "symbol": "Zlato XAU/USD",
   "ticker": "XAUUSD",
-  "data_file": "GCF_4h.json",
+  "data_file": "GCF_1h.json",
   "current_price": 4187.30,
   "as_of": "3. 7. 2026",
-  "source": "Yahoo Finance GC=F (4H)",
-  "display_start": "2026-06-08",
+  "source": "Yahoo Finance GC=F (1H)",
+  "display_start": "2026-06-25",
   "ylim": [3920, 4470],
   "pip_size": 1.0,
   "unit_label": "USD",
@@ -16,7 +16,7 @@
       "side": "LONG",
       "zone": [4140, 4165],
       "entry": 4165,
-      "sl": 4135,
+      "sl": 4128,
       "tp": 4385,
       "rationale": "poptávka 4151 (21.6.) nad trojitým dnem 3955–3975; nákup na pullbacku"
     },
@@ -25,15 +25,15 @@
       "side": "SHORT",
       "zone": [4385, 4410],
       "entry": 4385,
-      "sl": 4415,
+      "sl": 4422,
       "tp": 4165,
       "rationale": "opakovaná rejekce 4391–4404 (15.–17.6.), origin poklesu; pod 4500–4543"
     }
   ],
   "notes": [
     "Cena 4 187,30 je uprostřed rozpětí 4 165–4 385 → čekající (pending) příkazy, ne okamžitý vstup.",
-    "Obě zóny míří na sebe: TP obchodu = protilehlá zóna („zóna do zóny“), RRR ≈ 7:1.",
-    "SL je za vzdálenou hranou zóny (~30 USD) proti proražení knotem.",
+    "Obě zóny míří na sebe: TP obchodu = protilehlá zóna („zóna do zóny“), RRR ≈ 6:1.",
+    "SL je za vzdálenou hranou zóny (~10–15 USD) proti proražení knotem.",
     "Zdroj dat GC=F (zlaté futures COMEX); XAUUSD=X Yahoo nemá. 1 USD/oz pohyb = jednotka rizika.",
     "Zlato je citlivé na výnosy dluhopisů, DXY a data (CPI/FOMC); riziko max. 1–2 % kapitálu."
   ]
