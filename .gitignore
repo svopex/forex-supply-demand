@@ -10,7 +10,7 @@ venv/
 # Vygenerované výstupy (PDF grafy a plány + PNG náhledy stran a stažená data)
 *.pdf
 *_page[0-9]*.png
-*_1h.json
+*.json
 
 # Lokální konfigurace Claude Code (necommitujeme uživatelská nastavení)
 .claude/settings.local.json
