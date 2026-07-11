@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 # Vykreslí 1h svíčkový graf instrumentu (forex pár, index NQ, zlato XAUUSD…) se
-# supply/demand zónami a vygeneruje dvoustránkové PDF (graf + obchodní plán).
-# Vše řízeno JSON configem.
+# supply/demand zónami a vygeneruje vícestránkové PDF (graf + případné detaily
+# zón + obchodní plán). Vše řízeno JSON configem.
+#
+# DETAILNÍ GRAFY ZÓN: když vznik zóny (base + impulz) leží před začátkem
+# hlavního výseku (display_start) nebo mimo ylim, není v hlavním grafu vidět
+# „situace kolem zóny". Skript pak automaticky přidá stránku s detailním
+# výřezem: N svíček před base a N svíček po ní (detail_bars_before/after,
+# výchozí 40/40). Vznik zóny se bere z polí base_od/base_do setupu (unix
+# timestampy zkopírované ze <symbol>_zones.json); bez nich se dohledá jako
+# poslední souvislý úsek svíček protínajících pásmo zóny.
 #
 # KLÍČOVÉ K ČEŠTINĚ: matplotlib s výchozím fontem DejaVu Sans plně podporuje
 # českou diakritiku (ě š č ř ž ý á í é ú ů ď ť ň i uvozovky „ "). Tím se
@@ -102,38 +110,60 @@ start_ts = datetime.datetime.strptime(cfg["display_start"], "%Y-%m-%d") \
     .replace(tzinfo=TZ).timestamp()
 disp = [b for b in bars if b[0] >= start_ts]
 n = len(disp)
+# bary jsou seřazené podle času, disp je tedy sufix celé řady -> index prvního
+# zobrazeného baru (pro test, zda je vznik zóny v hlavním výseku vidět)
+first_disp_idx = len(bars) - n
+
+# ---------- sdílené kreslicí funkce (hlavní graf i detaily zón) ----------
+
+# Vykreslí svíčky do dané osy (x = pořadí baru kvůli vynechání mezer v datech).
+def vykresli_svicky(ax, data):
+    for i, (t, O, H, L, C) in enumerate(data):
+        up = C >= O
+        col = "#26a69a" if up else "#ef5350"
+        ax.plot([i, i], [L, H], color=col, linewidth=0.8, zorder=2)  # knot
+        lo, hi = (O, C) if up else (C, O)
+        ax.add_patch(Rectangle((i - 0.3, lo), 0.6, max(hi - lo, 1e-6),
+                               facecolor=col, edgecolor=col, linewidth=0.5, zorder=3))
+
+# Vodorovná cenová úroveň s popiskem v pravém okraji (mimo osu, aby se
+# popisky nepřekrývaly se svíčkami); nbars = počet barů v ose.
+def hline(ax, nbars, y, color, style, lw, label):
+    ax.axhline(y, color=color, linestyle=style, linewidth=lw, zorder=4)
+    ax.text(nbars + 1.5, y, label, va="center", ha="left", color=color,
+            fontsize=7.5, fontweight="bold", zorder=6, clip_on=False)
+
+# Popisky osy X: datum při změně dne (v burzovním pásmu); krok=2 = každý
+# druhý den (hustý hlavní graf), krok=1 = každý den (kratší detailní výřez).
+def osa_dnu(ax, data, krok=2):
+    ticks, labels, last_day = [], [], None
+    for i, (t, *_ ) in enumerate(data):
+        d = datetime.datetime.fromtimestamp(t, TZ).strftime("%d.%m.")
+        if d != last_day:
+            ticks.append(i); labels.append(d); last_day = d
+    ax.set_xticks(ticks[::krok]); ax.set_xticklabels(labels[::krok], fontsize=7)
+
+# Barevné pásmo zóny s popiskem u levého okraje.
+def pasmo_zony(ax, s):
+    z0, z1 = s["zone"]
+    ax.axhspan(z0, z1, color=BARVA[s["zone_type"]], alpha=0.16, zorder=1)
+    ax.text(0.3, z1 if s["zone_type"] == "SUPPLY" else z0,
+            f"  {s['zone_type']} zóna {pf(z0)}–{pf(z1)}",
+            va="bottom" if s["zone_type"] == "SUPPLY" else "top",
+            ha="left", color=BARVA[s["side"]], fontsize=9, fontweight="bold", zorder=6)
 
 # ---------- STRÁNKA 1: 1h svíčkový graf ----------
 fig1 = plt.figure(figsize=(11.69, 8.27))     # A4 na šířku
 ax = fig1.add_axes([0.075, 0.135, 0.70, 0.775])  # užší osa -> místo na popisky
 
-# Svíčky (x = index baru kvůli vynechání víkendových mezer)
-for i, (t, O, H, L, C) in enumerate(disp):
-    up = C >= O
-    col = "#26a69a" if up else "#ef5350"
-    ax.plot([i, i], [L, H], color=col, linewidth=0.8, zorder=2)  # knot
-    lo, hi = (O, C) if up else (C, O)
-    ax.add_patch(Rectangle((i - 0.3, lo), 0.6, max(hi - lo, 1e-6),
-                           facecolor=col, edgecolor=col, linewidth=0.5, zorder=3))
-
-# Popisky cenových úrovní do pravého okraje (mimo osu, aby se nepřekrývaly)
-def hline(y, color, style, lw, label):
-    ax.axhline(y, color=color, linestyle=style, linewidth=lw, zorder=4)
-    ax.text(n + 1.5, y, label, va="center", ha="left", color=color,
-            fontsize=7.5, fontweight="bold", zorder=6, clip_on=False)
+vykresli_svicky(ax, disp)
 
 # Zóny + úrovně pro každý setup
 for s in setups:
-    zc = BARVA[s["zone_type"]]
     lc = BARVA[s["side"]]
-    z0, z1 = s["zone"]
-    ax.axhspan(z0, z1, color=zc, alpha=0.16, zorder=1)
-    ax.text(0.3, z1 if s["zone_type"] == "SUPPLY" else z0,
-            f"  {s['zone_type']} zóna {pf(z0)}–{pf(z1)}",
-            va="bottom" if s["zone_type"] == "SUPPLY" else "top",
-            ha="left", color=lc, fontsize=9, fontweight="bold", zorder=6)
-    hline(s["sl"], lc, (0, (1, 2)), 1.0, f"SL {s['side'].lower()} {pf(s['sl'])}")
-    hline(s["entry"], lc, (0, (4, 2)), 1.3,
+    pasmo_zony(ax, s)
+    hline(ax, n, s["sl"], lc, (0, (1, 2)), 1.0, f"SL {s['side'].lower()} {pf(s['sl'])}")
+    hline(ax, n, s["entry"], lc, (0, (4, 2)), 1.3,
           f"{s['side']} {pf(s['entry'])}  (TP {pf(s['tp'])})")
 
 # Aktuální cena
@@ -141,13 +171,7 @@ ax.axhline(current, color="#1565c0", linestyle="-", linewidth=1.1, zorder=4)
 ax.text(n + 1.5, current, f"aktuální {pf(current)}", va="center", ha="left",
         color="#1565c0", fontsize=8, fontweight="bold", zorder=6, clip_on=False)
 
-# Osa X – datum při změně dne
-ticks, labels, last_day = [], [], None
-for i, (t, *_ ) in enumerate(disp):
-    d = datetime.datetime.fromtimestamp(t, TZ).strftime("%d.%m.")
-    if d != last_day:
-        ticks.append(i); labels.append(d); last_day = d
-ax.set_xticks(ticks[::2]); ax.set_xticklabels(labels[::2], fontsize=7)
+osa_dnu(ax, disp, krok=2)
 ax.set_xlim(-1, n + 0.5)
 
 # Osa Y – z configu nebo automaticky z výseku s rezervou
@@ -171,6 +195,108 @@ leg = ("červené pásmo = SUPPLY (prodej)      zelené pásmo = DEMAND (nákup)
        f"Zóna do zóny:  {z2z}   (TP každého obchodu = protilehlá zóna)")
 fig1.text(0.5, 0.045, leg, fontsize=8, va="center", ha="center",
           bbox=dict(boxstyle="round,pad=0.6", fc="#f5f5f5", ec="#bbbbbb"))
+
+# ---------- DETAILNÍ GRAFY ZÓN (jen když vznik zóny není v hlavním výseku vidět) ----------
+# Zóna vzniklá hluboko v historii je v hlavním grafu jen prázdné pásmo bez
+# svíček — není vidět base ani impulzní odchod, tedy „situace kolem zóny".
+# Pro každou takovou zónu se přidá stránka s výřezem kolem jejího vzniku.
+
+DETAIL_PRED = cfg.get("detail_bars_before", 40)   # svíček před začátkem base
+DETAIL_PO = cfg.get("detail_bars_after", 40)      # svíček po konci base
+
+# Najde index prvního baru s časem >= ts (bary jsou seřazené podle času).
+def idx_podle_casu(ts):
+    for i, b in enumerate(bars):
+        if b[0] >= ts:
+            return i
+    return len(bars) - 1
+
+# Určí rozsah barů vzniku zóny (indexy první a poslední svíčky base):
+# primárně z polí base_od/base_do setupu (unix timestampy ze zones.json),
+# jinak fallback = poslední souvislý úsek svíček protínajících pásmo zóny
+# (u čerstvé zóny bez retestů je to právě base + odchod).
+def rozsah_vzniku(s):
+    if "base_od" in s and "base_do" in s:
+        return idx_podle_casu(s["base_od"]), idx_podle_casu(s["base_do"])
+    z0, z1 = s["zone"]
+    posledni = None
+    for i, (t, o, h, l, c) in enumerate(bars):
+        if h >= z0 and l <= z1:
+            posledni = i
+    if posledni is None:
+        return None, None
+    prvni = posledni
+    while prvni > 0 and bars[prvni - 1][2] >= z0 and bars[prvni - 1][3] <= z1:
+        prvni -= 1
+    return prvni, posledni
+
+# Vznik zóny je v hlavním grafu vidět, když celá base leží v zobrazeném okně
+# a pásmo zóny se vejde do ylim (je-li v configu zadané ručně).
+def vznik_viditelny(s, i0):
+    if i0 is None:
+        return True          # vznik nešel dohledat -> detail nemá co ukázat
+    if i0 < first_disp_idx:
+        return False         # base začíná před display_start (moc do historie)
+    if "ylim" in cfg:
+        z0, z1 = s["zone"]
+        if z0 < cfg["ylim"][0] or z1 > cfg["ylim"][1]:
+            return False     # zóna je oříznutá ruční osou Y
+    return True
+
+detail_figs = []
+for s in setups:
+    i0, i1 = rozsah_vzniku(s)
+    if vznik_viditelny(s, i0):
+        continue
+    # výřez: DETAIL_PRED svíček před base a DETAIL_PO svíček po ní
+    lo = max(0, i0 - DETAIL_PRED)
+    hi = min(len(bars), i1 + DETAIL_PO + 1)
+    sub = bars[lo:hi]
+    m = len(sub)
+    lc = BARVA[s["side"]]
+    z0, z1 = s["zone"]
+
+    figd = plt.figure(figsize=(11.69, 8.27))          # A4 na šířku jako graf
+    axd = figd.add_axes([0.075, 0.135, 0.70, 0.775])
+    # šedý svislý pás = svíčky base (vznik zóny), ať je situace ihned vidět
+    axd.axvspan(i0 - lo - 0.45, i1 - lo + 0.45, color="#90a4ae", alpha=0.18, zorder=0)
+    vykresli_svicky(axd, sub)
+    pasmo_zony(axd, s)
+    hline(axd, m, s["entry"], lc, (0, (4, 2)), 1.3, f"{s['side']} {pf(s['entry'])}  (vstup)")
+    hline(axd, m, s["sl"], lc, (0, (1, 2)), 1.0, f"SL {pf(s['sl'])}")
+
+    # osa Y těsně kolem výřezu, ale vždy zahrnout celou zónu, vstup i SL
+    lows = [b[3] for b in sub] + [z0, s["sl"], s["entry"]]
+    highs = [b[2] for b in sub] + [z1, s["sl"], s["entry"]]
+    pad = (max(highs) - min(lows)) * 0.06
+    axd.set_ylim(min(lows) - pad, max(highs) + pad)
+    # TP a aktuální cena bývají daleko -> jen pokud padnou do rozsahu výřezu
+    y0ax, y1ax = axd.get_ylim()
+    if y0ax <= s["tp"] <= y1ax:
+        hline(axd, m, s["tp"], lc, (0, (6, 2)), 1.0, f"TP {pf(s['tp'])}")
+    if y0ax <= current <= y1ax:
+        axd.axhline(current, color="#1565c0", linestyle="-", linewidth=1.1, zorder=4)
+        axd.text(m + 1.5, current, f"aktuální {pf(current)}", va="center", ha="left",
+                 color="#1565c0", fontsize=8, fontweight="bold", zorder=6, clip_on=False)
+
+    osa_dnu(axd, sub, krok=1)   # kratší výřez -> popisek na každý den
+    axd.set_xlim(-1, m + 0.5)
+    axd.set_ylabel(cfg["symbol"], fontsize=10)
+    axd.grid(True, axis="y", linestyle=":", alpha=0.35)
+    vznik = datetime.datetime.fromtimestamp(bars[i1][0], TZ).strftime("%d. %m. %Y %H:%M")
+    axd.set_title(f"{cfg['symbol']} — DETAIL {s['zone_type']} zóny {pf(z0)}–{pf(z1)} "
+                  f"({s['side']}) — vznik {vznik}\n"
+                  f"výřez {i0 - lo} svíček před base a {hi - 1 - i1} po ní "
+                  f"(vznik zóny leží mimo výsek hlavního grafu)",
+                  fontsize=12, fontweight="bold", pad=12)
+    figd.text(0.5, 0.045,
+              "šedý svislý pás = base (svíčky vzniku zóny)      barevné pásmo = zóna      "
+              "– –  vstup      ····  stop-loss\n"
+              "Detailní stránka se přidává automaticky, když situace kolem zóny "
+              "(base + impulzní odchod) není vidět v hlavním grafu.",
+              fontsize=8, va="center", ha="center",
+              bbox=dict(boxstyle="round,pad=0.6", fc="#f5f5f5", ec="#bbbbbb"))
+    detail_figs.append(figd)
 
 # ---------- STRÁNKA 2+: obchodní plán (teče přes více stránek dle objemu textu) ----------
 # Plán se sází "tokem": kurzor plyne shora dolů a jakmile by blok textu spadl pod
@@ -275,14 +401,15 @@ if not ticker:
     ticker = base.replace("_1h.json", "").replace(".json", "")
 out = cfg.get("output", f"{date_str}_{ticker}.pdf")
 
-# Do PDF: nejdřív graf (stránka 1), pak všechny stránky plánu.
+# Do PDF: hlavní graf, pak detailní grafy zón (jsou-li), pak stránky plánu.
+vsechny = [fig1] + detail_figs + plan_figs
 with PdfPages(out) as pdf:
-    pdf.savefig(fig1)
-    for f in plan_figs:
+    for f in vsechny:
         pdf.savefig(f)
-# Náhledy na vizuální kontrolu: _page1 = graf, _page2.. = stránky plánu.
-fig1.savefig(out.replace(".pdf", "_page1.png"), dpi=110)
-for i, f in enumerate(plan_figs, start=2):
+# Náhledy na vizuální kontrolu: _page1 = hlavní graf, dál detaily zón a plán
+# (číslované průběžně podle pořadí stránek v PDF).
+for i, f in enumerate(vsechny, start=1):
     f.savefig(out.replace(".pdf", f"_page{i}.png"), dpi=110)
 plt.close("all")
-print("PDF hotovo:", out, f"({1 + len(plan_figs)} stránek)")
+print("PDF hotovo:", out,
+      f"({len(vsechny)} stránek, z toho {len(detail_figs)} detail zóny)")
