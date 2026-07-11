@@ -7,6 +7,9 @@ __pycache__/
 .venv/
 venv/
 
+# Pracovní podadresář skillu (venv, cache, stažená data, configy, PNG náhledy)
+work/
+
 # Vygenerované výstupy (PDF grafy a plány + PNG náhledy stran a stažená data)
 *.pdf
 *_page[0-9]*.png
