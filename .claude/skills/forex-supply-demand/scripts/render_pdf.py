@@ -346,27 +346,32 @@ for idx, s in enumerate(setups):
     risk = abs(s["entry"] - s["sl"]) / pip
     reward = abs(s["tp"] - s["entry"]) / pip
     rrr = reward / risk if risk else 0
-    # zdůvodnění bývá dlouhé -> předem zalomíme a odhadneme výšku celého bloku,
-    # abychom ho případně celý posunuli na novou stránku (nerozdělíme ho v půli)
+    # Zdůvodnění bývá delší než celá stránka, takže blok setupu nelze držet vcelku —
+    # pohromadě udržíme jen "hlavu" (nadpis + parametry + první tři řádky textu),
+    # aby na konci stránky neosiřel nadpis; zbytek zdůvodnění pak teče po řádcích.
     rationale = s.get("rationale", "")
     radky = textwrap.wrap(rationale, width=100) or [""]
-    blok_h = 0.036 + 5 * 0.028 + len(radky) * 0.025 + 0.015
-    zajisti(blok_h)
+    hlava_h = 0.036 + 5 * 0.028 + 3 * 0.025
+    zajisti(hlava_h)
     T(0.06, f"{kruh[idx]} {s['zone_type']} zóna ({s['side']} / "
       f"{'prodej' if s['side']=='SHORT' else 'nákup'})", 13, "bold", lc, dy=0.036)
     rows = [
         ("Zóna:", f"{pf(s['zone'][0])} – {pf(s['zone'][1])}"),
         ("Vstup:", f"{pf(s['entry'])}  ({'Sell' if s['side']=='SHORT' else 'Buy'} Limit, proximální hrana)"),
         ("Stop-loss:", f"{pf(s['sl'])}  (za vzdálenou hranou zóny)  = {risk:.0f} {unit}"),
-        ("Take-profit:", f"{pf(s['tp'])}  (protilehlá zóna)  = {reward:.0f} {unit}"),
+        # popis cíle lze přebít polem tp_popis (když TP není protilehlá zóna,
+        # ale třeba hrana konsolidace u protitrendového obchodu)
+        ("Take-profit:", f"{pf(s['tp'])}  ({s.get('tp_popis', 'protilehlá zóna')})  = {reward:.0f} {unit}"),
         ("Poměr RRR:", f"≈ {rrr:.2f} : 1"),
     ]
     # jednořádkové parametry setupu (klíč vlevo, hodnota od 0.30 na stejném řádku)
     for k, v in rows:
         T(0.09, k, 10.5, "bold"); T(0.30, v, 10.5, dy=0.028)
-    # zdůvodnění: popisek na prvním řádku, zalomený text pod ním
+    # zdůvodnění: popisek na prvním řádku, zalomený text pod ním; dlouhý text
+    # přeteče na další stránku po jednotlivých řádcích (nikdy se neuřízne)
     T(0.09, "Zdůvodnění:", 10.5, "bold")
     for ln in radky:
+        zajisti(0.025)
         T(0.30, ln, 10.5, dy=0.025)
     plan_state["y"] -= 0.015
 
